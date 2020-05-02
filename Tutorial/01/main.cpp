@@ -1,3 +1,4 @@
+#include <iostream>
 #include "IOCompletionPort.h"
 
 const UINT16 SERVER_PORT = 11021;
@@ -11,11 +12,11 @@ int main()
 	ioCompletionPort.InitSocket();
 
 	//소켓과 서버 주소를 연결하고 등록 시킨다.
-	ioCompletionPort.BindandListen(SERVER_PORT);
+	ioCompletionPort.BindAndListen(SERVER_PORT);
 
 	ioCompletionPort.StartServer(MAX_CLIENT);
 
-	printf("아무 키나 누를 때까지 대기합니다\n");
+	std::cout << "아무 키나 누를 때까지 대기합니다" << std::endl;
 	getchar();
 
 	ioCompletionPort.DestroyThread();
