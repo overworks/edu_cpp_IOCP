@@ -2,6 +2,10 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="IOCPServer.cpp">
+      <Filter>ServerNetwork</Filter>
+    </ClCompile>
+    <ClCompile Include="EchoServer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="IOCPServer.h">
@@ -10,6 +14,7 @@
     <ClInclude Include="Define.h">
       <Filter>ServerNetwork</Filter>
     </ClInclude>
+    <ClInclude Include="EchoServer.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="ServerNetwork">

@@ -25,7 +25,7 @@ struct stOverlappedEx
 //클라이언트 정보를 담기위한 구조체
 struct stClientInfo
 {
-	INT32 mIndex = 0;
+	INT32			mIndex;
 	SOCKET			m_socketClient;			//Cliet와 연결되는 소켓
 	stOverlappedEx	m_stRecvOverlappedEx;	//RECV Overlapped I/O작업을 위한 변수
 	stOverlappedEx	m_stSendOverlappedEx;	//SEND Overlapped I/O작업을 위한 변수
@@ -34,9 +34,13 @@ struct stClientInfo
 	char			mSendBuf[MAX_SOCKBUF]; //데이터 버퍼
 
 	stClientInfo()
+		: stClientInfo(0)
+	{}
+
+	stClientInfo(INT32 index)
+		: mIndex(index), m_socketClient(INVALID_SOCKET)
 	{
 		ZeroMemory(&m_stRecvOverlappedEx, sizeof(stOverlappedEx));
 		ZeroMemory(&m_stSendOverlappedEx, sizeof(stOverlappedEx));
-		m_socketClient = INVALID_SOCKET;
 	}
 };

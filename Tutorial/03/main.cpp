@@ -13,11 +13,11 @@ int main()
 	server.InitSocket();
 
 	//소켓과 서버 주소를 연결하고 등록 시킨다.
-	server.BindandListen(SERVER_PORT);
+	server.BindAndListen(SERVER_PORT);
 
 	server.StartServer(MAX_CLIENT);
 
-	printf("아무 키나 누를 때까지 대기합니다\n");
+	std::cout << "종료하시려면 quit라고 치시고 엔터키를 누르세요." << std::endl;
 	while (true)
 	{
 		std::string inputCmd;
