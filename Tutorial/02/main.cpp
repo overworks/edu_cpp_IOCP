@@ -13,11 +13,11 @@ int main()
 	ioCompletionPort.InitSocket();
 
 	//소켓과 서버 주소를 연결하고 등록 시킨다.
-	ioCompletionPort.BindandListen(SERVER_PORT);
+	ioCompletionPort.BindAndListen(SERVER_PORT);
 
 	ioCompletionPort.StartServer(MAX_CLIENT);
 
-	printf("아무 키나 누를 때까지 대기합니다\n");
+	std::cout << "종료하려면 quit를 치시고 엔터키를 눌러주세요." << std::endl;
 	while (true)
 	{
 		std::string inputCmd;
