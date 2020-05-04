@@ -13,7 +13,7 @@ int main()
 	server.InitSocket();
 
 	//소켓과 서버 주소를 연결하고 등록 시킨다.
-	server.BindandListen(SERVER_PORT);
+	server.BindAndListen(SERVER_PORT);
 
 	server.Run(MAX_CLIENT);
 

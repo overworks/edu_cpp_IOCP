@@ -1,6 +1,9 @@
 #pragma once
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <windows.h>
 
 struct PacketData
@@ -9,26 +12,9 @@ struct PacketData
 	UINT32 DataSize = 0;
 	char* pPacketData = nullptr;
 
-	void Set(PacketData& vlaue)
-	{
-		SessionIndex = vlaue.SessionIndex;
-		DataSize = vlaue.DataSize;
-
-		pPacketData = new char[vlaue.DataSize];
-		CopyMemory(pPacketData, vlaue.pPacketData, vlaue.DataSize);
-	}
-
-	void Set(UINT32 sessionIndex_, UINT32 dataSize_, char* pData)
-	{
-		SessionIndex = sessionIndex_;
-		DataSize = dataSize_;
-
-		pPacketData = new char[dataSize_];
-		CopyMemory(pPacketData, pData, dataSize_);
-	}
-
-	void Release()
-	{
-		delete pPacketData;
-	}
+	PacketData() = default;
+	PacketData(UINT sessionIndex, UINT32 dataSize, const char* pData);
+	~PacketData();
+	void Set(UINT32 sessionIndex, UINT32 dataSize, const char* pData);
+	void Release();
 };
