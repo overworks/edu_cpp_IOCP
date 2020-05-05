@@ -3,21 +3,25 @@
 #include <iostream>
 
 const UINT16 SERVER_PORT = 11021;
-const UINT16 MAX_CLIENT = 100;		//ÃÑ Á¢¼ÓÇÒ¼ö ÀÖ´Â Å¬¶óÀÌ¾ğÆ® ¼ö
+const UINT16 MAX_CLIENT = 100;		//ì´ ì ‘ì†í• ìˆ˜ ìˆëŠ” í´ë¼ì´ì–¸íŠ¸ ìˆ˜
 
 int main()
 {
+	// utf-8ì„ ì‚¬ìš©í•˜ê¸° ìœ„í•œ ì¤€ë¹„ (https://jacking75.github.io/C++_VC_utf-8_source_code/ ì°¸ì¡°)
+	SetConsoleOutputCP(CP_UTF8);
+	setvbuf(stdout, nullptr, _IOFBF, 1024);
+
 	EchoServer server;
 
-	//¼ÒÄÏÀ» ÃÊ±âÈ­
+	//ì†Œì¼“ì„ ì´ˆê¸°í™”
 	server.InitSocket();
 
-	//¼ÒÄÏ°ú ¼­¹ö ÁÖ¼Ò¸¦ ¿¬°áÇÏ°í µî·Ï ½ÃÅ²´Ù.
-	server.BindandListen(SERVER_PORT);
+	//ì†Œì¼“ê³¼ ì„œë²„ ì£¼ì†Œë¥¼ ì—°ê²°í•˜ê³  ë“±ë¡ ì‹œí‚¨ë‹¤.
+	server.BindAndListen(SERVER_PORT);
 
 	server.Run(MAX_CLIENT);
 
-	printf("¾Æ¹« Å°³ª ´©¸¦ ¶§±îÁö ´ë±âÇÕ´Ï´Ù\n");
+	std::cout << u8"ì•„ë¬´ í‚¤ë‚˜ ëˆ„ë¥¼ ë•Œê¹Œì§€ ëŒ€ê¸°í•©ë‹ˆë‹¤" << std::endl;
 	while (true)
 	{
 		std::string inputCmd;
