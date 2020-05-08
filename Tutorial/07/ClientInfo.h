@@ -6,280 +6,49 @@
 #include <queue>
 
 
-//Å¬¶óÀÌ¾ğÆ® Á¤º¸¸¦ ´ã±âÀ§ÇÑ ±¸Á¶Ã¼
+//í´ë¼ì´ì–¸íŠ¸ ì •ë³´ë¥¼ ë‹´ê¸°ìœ„í•œ êµ¬ì¡°ì²´
 class stClientInfo
 {
 public:
-	stClientInfo()
-	{
-		ZeroMemory(&mRecvOverlappedEx, sizeof(stOverlappedEx));
-		mSocket = INVALID_SOCKET;
-	}
+	stClientInfo(int index, HANDLE hIOCP);
 
-	void Init(const UINT32 index, HANDLE iocpHandle_)
-	{
-		mIndex = index;
-		mIOCPHandle = iocpHandle_;
-	}
+	int GetIndex() const { return mIndex; }
+	bool IsConnected() const { return mIsConnected; }
+	SOCKET GetSock() const { return mSocket; }
+	UINT64 GetLatestClosedTimeSec() const { return mLatestClosedTimeSec; }
+	const char* RecvBuffer() { return mRecvBuf; }
 
-	UINT32 GetIndex() { return mIndex; }
+	void Clear();
+	bool PostAccept(SOCKET listenSock, UINT64 curTimeSec);
+	bool AcceptCompletion();
+	bool BindIOCompletionPort(HANDLE hIOCP);
+	bool OnConnect(HANDLE hIOCP, SOCKET socket);
+	void Close(bool bIsForce = false);
+	bool BindRecv();
+	// 1ê°œì˜ ìŠ¤ë ˆë“œì—ì„œë§Œ í˜¸ì¶œí•´ì•¼ í•œë‹¤!
+	bool SendMsg(UINT32 dataSize, const char* pMsg);
+	void SendCompleted(UINT32 dataSize);
 
-	bool IsConnectd() { return mIsConnect == 1; }
-	
-	SOCKET GetSock() { return mSocket; }
-
-	UINT64 GetLatestClosedTimeSec() { return mLatestClosedTimeSec; }
-
-	char* RecvBuffer() { return mRecvBuf; }
-
-
-	bool OnConnect(HANDLE iocpHandle_, SOCKET socket_)
-	{
-		mSocket = socket_;
-		mIsConnect = 1;
-		
-		Clear();
-
-		//I/O Completion Port°´Ã¼¿Í ¼ÒÄÏÀ» ¿¬°á½ÃÅ²´Ù.
-		if (BindIOCompletionPort(iocpHandle_) == false)
-		{
-			return false;
-		}
-
-		return BindRecv();
-	}
-
-	void Close(bool bIsForce = false)
-	{
-		struct linger stLinger = { 0, 0 };	// SO_DONTLINGER·Î ¼³Á¤
-
-	// bIsForce°¡ trueÀÌ¸é SO_LINGER, timeout = 0À¸·Î ¼³Á¤ÇÏ¿© °­Á¦ Á¾·á ½ÃÅ²´Ù. ÁÖÀÇ : µ¥ÀÌÅÍ ¼Õ½ÇÀÌ ÀÖÀ»¼ö ÀÖÀ½ 
-		if (true == bIsForce)
-		{
-			stLinger.l_onoff = 1;
-		}
-
-		//socketClose¼ÒÄÏÀÇ µ¥ÀÌÅÍ ¼Û¼ö½ÅÀ» ¸ğµÎ Áß´Ü ½ÃÅ²´Ù.
-		shutdown(mSocket, SD_BOTH);
-
-		//¼ÒÄÏ ¿É¼ÇÀ» ¼³Á¤ÇÑ´Ù.
-		setsockopt(mSocket, SOL_SOCKET, SO_LINGER, (char*)&stLinger, sizeof(stLinger));
-				
-		mIsConnect = 0;
-		mLatestClosedTimeSec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-		//¼ÒÄÏ ¿¬°áÀ» Á¾·á ½ÃÅ²´Ù.
-		closesocket(mSocket);		
-		mSocket = INVALID_SOCKET;
-	}
-
-	void Clear()
-	{		
-	}
-
-	bool PostAccept(SOCKET listenSock_, const UINT64 curTimeSec_)
-	{
-		printf_s("PostAccept. client Index: %d\n", GetIndex());
-
-		mLatestClosedTimeSec = UINT32_MAX;
-
-		mSocket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_IP,
-			NULL, 0, WSA_FLAG_OVERLAPPED);
-		if (INVALID_SOCKET == mSocket)
-		{
-			printf_s("client Socket WSASocket Error : %d\n", GetLastError());
-			return false;
-		}
-
-		ZeroMemory(&mAcceptContext, sizeof(stOverlappedEx));
-		
-		DWORD bytes = 0;
-		DWORD flags = 0;
-		mAcceptContext.m_wsaBuf.len = 0;
-		mAcceptContext.m_wsaBuf.buf = nullptr;
-		mAcceptContext.m_eOperation = IOOperation::ACCEPT;
-		mAcceptContext.SessionIndex = mIndex;
-
-		if (FALSE == AcceptEx(listenSock_, mSocket, mAcceptBuf, 0,
-			sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, &bytes, (LPWSAOVERLAPPED) & (mAcceptContext)))
-		{
-			if (WSAGetLastError() != WSA_IO_PENDING)
-			{
-				printf_s("AcceptEx Error : %d\n", GetLastError());
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	bool AcceptCompletion()
-	{
-		printf_s("AcceptCompletion : SessionIndex(%d)\n", mIndex);
-
-		if (OnConnect(mIOCPHandle, mSocket) == false)
-		{
-			return false;
-		}
-
-		SOCKADDR_IN		stClientAddr;
-		int nAddrLen = sizeof(SOCKADDR_IN);
-		char clientIP[32] = { 0, };
-		inet_ntop(AF_INET, &(stClientAddr.sin_addr), clientIP, 32 - 1);
-		printf("Å¬¶óÀÌ¾ğÆ® Á¢¼Ó : IP(%s) SOCKET(%d)\n", clientIP, (int)mSocket);
-		
-		return true;
-	}
-
-	bool BindIOCompletionPort(HANDLE iocpHandle_)
-	{
-		//socket°ú pClientInfo¸¦ CompletionPort°´Ã¼¿Í ¿¬°á½ÃÅ²´Ù.
-		auto hIOCP = CreateIoCompletionPort((HANDLE)GetSock()
-			, iocpHandle_
-			, (ULONG_PTR)(this), 0);
-
-		if (hIOCP == INVALID_HANDLE_VALUE)
-		{
-			printf("[¿¡·¯] CreateIoCompletionPort()ÇÔ¼ö ½ÇÆĞ: %d\n", GetLastError());
-			return false;
-		}
-
-		return true;
-	}
-
-	bool BindRecv()
-	{
-		DWORD dwFlag = 0;
-		DWORD dwRecvNumBytes = 0;
-
-		//Overlapped I/OÀ» À§ÇØ °¢ Á¤º¸¸¦ ¼ÂÆÃÇØ ÁØ´Ù.
-		mRecvOverlappedEx.m_wsaBuf.len = MAX_SOCK_RECVBUF;
-		mRecvOverlappedEx.m_wsaBuf.buf = mRecvBuf;
-		mRecvOverlappedEx.m_eOperation = IOOperation::RECV;
-
-		int nRet = WSARecv(mSocket,
-			&(mRecvOverlappedEx.m_wsaBuf),
-			1,
-			&dwRecvNumBytes,
-			&dwFlag,
-			(LPWSAOVERLAPPED) & (mRecvOverlappedEx),
-			NULL);
-
-		//socket_errorÀÌ¸é client socketÀÌ ²÷¾îÁø°É·Î Ã³¸®ÇÑ´Ù.
-		if (nRet == SOCKET_ERROR && (WSAGetLastError() != ERROR_IO_PENDING))
-		{
-			printf("[¿¡·¯] WSARecv()ÇÔ¼ö ½ÇÆĞ : %d\n", WSAGetLastError());
-			return false;
-		}
-
-		return true;
-	}
-
-	// 1°³ÀÇ ½º·¹µå¿¡¼­¸¸ È£ÃâÇØ¾ß ÇÑ´Ù!
-	bool SendMsg(const UINT32 dataSize_, char* pMsg_)
-	{	
-		auto sendOverlappedEx = new stOverlappedEx;
-		ZeroMemory(sendOverlappedEx, sizeof(stOverlappedEx));
-		sendOverlappedEx->m_wsaBuf.len = dataSize_;
-		sendOverlappedEx->m_wsaBuf.buf = new char[dataSize_];
-		CopyMemory(sendOverlappedEx->m_wsaBuf.buf, pMsg_, dataSize_);
-		sendOverlappedEx->m_eOperation = IOOperation::SEND;
-		
-		std::lock_guard<std::mutex> guard(mSendLock);
-
-		mSendDataqueue.push(sendOverlappedEx);
-
-		if (mSendDataqueue.size() == 1)
-		{
-			SendIO();
-		}
-		
-		return true;
-	}	
-
-	void SendCompleted(const UINT32 dataSize_)
-	{		
-		printf("[¼Û½Å ¿Ï·á] bytes : %d\n", dataSize_);
-
-		std::lock_guard<std::mutex> guard(mSendLock);
-
-		delete[] mSendDataqueue.front()->m_wsaBuf.buf;
-		delete mSendDataqueue.front();
-
-		mSendDataqueue.pop();
-
-		if (mSendDataqueue.empty() == false)
-		{
-			SendIO();
-		}
-	}
+private:
+	bool SendIO();
+	bool SetSocketOption();
 
 
 private:
-	bool SendIO()
-	{
-		auto sendOverlappedEx = mSendDataqueue.front();
+	int				mIndex = 0;
+	HANDLE			mIOCPHandle = INVALID_HANDLE_VALUE;
 
-		DWORD dwRecvNumBytes = 0;
-		int nRet = WSASend(mSocket,
-			&(sendOverlappedEx->m_wsaBuf),
-			1,
-			&dwRecvNumBytes,
-			0,
-			(LPWSAOVERLAPPED)sendOverlappedEx,
-			NULL);
+	bool			mIsConnected = false;
+	UINT64			mLatestClosedTimeSec = 0;
 
-		//socket_errorÀÌ¸é client socketÀÌ ²÷¾îÁø°É·Î Ã³¸®ÇÑ´Ù.
-		if (nRet == SOCKET_ERROR && (WSAGetLastError() != ERROR_IO_PENDING))
-		{
-			printf("[¿¡·¯] WSASend()ÇÔ¼ö ½ÇÆĞ : %d\n", WSAGetLastError());
-			return false;
-		}
-
-		return true;
-	}
-
-	bool SetSocketOption()
-	{
-		/*if (SOCKET_ERROR == setsockopt(mSock, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, (char*)GIocpManager->GetListenSocket(), sizeof(SOCKET)))
-		{
-			printf_s("[DEBUG] SO_UPDATE_ACCEPT_CONTEXT error: %d\n", GetLastError());
-			return false;
-		}*/
-
-		int opt = 1;
-		if (SOCKET_ERROR == setsockopt(mSocket, IPPROTO_TCP, TCP_NODELAY, (const char*)&opt, sizeof(int)))
-		{
-			printf_s("[DEBUG] TCP_NODELAY error: %d\n", GetLastError());
-			return false;
-		}
-
-		opt = 0;
-		if (SOCKET_ERROR == setsockopt(mSocket, SOL_SOCKET, SO_RCVBUF, (const char*)&opt, sizeof(int)))
-		{
-			printf_s("[DEBUG] SO_RCVBUF change error: %d\n", GetLastError());
-			return false;
-		}
-
-		return true;
-	}
-
-
-	INT32 mIndex = 0;
-	HANDLE mIOCPHandle = INVALID_HANDLE_VALUE;
-
-	INT64 mIsConnect = 0;
-	UINT64 mLatestClosedTimeSec = 0;
-
-	SOCKET			mSocket;			//Cliet¿Í ¿¬°áµÇ´Â ¼ÒÄÏ
+	SOCKET			mSocket;			//Clietì™€ ì—°ê²°ë˜ëŠ” ì†Œì¼“
 
 	stOverlappedEx	mAcceptContext;
-	char mAcceptBuf[64];
+	char			mAcceptBuf[64];
 
-	stOverlappedEx	mRecvOverlappedEx;	//RECV Overlapped I/OÀÛ¾÷À» À§ÇÑ º¯¼ö	
-	char			mRecvBuf[MAX_SOCK_RECVBUF]; //µ¥ÀÌÅÍ ¹öÆÛ
+	stOverlappedEx	mRecvOverlappedEx;	//RECV Overlapped I/Oì‘ì—…ì„ ìœ„í•œ ë³€ìˆ˜	
+	char			mRecvBuf[MAX_SOCK_RECVBUF]; //ë°ì´í„° ë²„í¼
 
 	std::mutex mSendLock;
-	std::queue<stOverlappedEx*> mSendDataqueue;
-
-	
+	std::queue<stOverlappedEx*> mSendDataQueue;
 };

@@ -4,8 +4,8 @@
 #include <Ws2tcpip.h>
 #include <mswsock.h>
 
-const UINT32 MAX_SOCK_RECVBUF = 256;	// ¼ÒÄÏ ¹öÆÛÀÇ Å©±â
-const UINT32 MAX_SOCK_SENDBUF = 4096;	// ¼ÒÄÏ ¹öÆÛÀÇ Å©±â
+const UINT32 MAX_SOCK_RECVBUF = 256;	// ì†Œì¼“ ë²„í¼ì˜ í¬ê¸°
+const UINT32 MAX_SOCK_SENDBUF = 4096;	// ì†Œì¼“ ë²„í¼ì˜ í¬ê¸°
 const UINT64 RE_USE_SESSION_WAIT_TIMESEC = 3;
 
 
@@ -16,12 +16,12 @@ enum class IOOperation
 	SEND
 };
 
-//WSAOVERLAPPED±¸Á¶Ã¼¸¦ È®Àå ½ÃÄÑ¼­ ÇÊ¿äÇÑ Á¤º¸¸¦ ´õ ³Ö¾ú´Ù.
+//WSAOVERLAPPEDêµ¬ì¡°ì²´ë¥¼ í™•ì¥ ì‹œì¼œì„œ í•„ìš”í•œ ì •ë³´ë¥¼ ë” ë„£ì—ˆë‹¤.
 struct stOverlappedEx
 {
-	WSAOVERLAPPED m_wsaOverlapped;		//Overlapped I/O±¸Á¶Ã¼
-	WSABUF		m_wsaBuf;				//Overlapped I/OÀÛ¾÷ ¹öÆÛ
-	IOOperation m_eOperation;			//ÀÛ¾÷ µ¿ÀÛ Á¾·ù
-	UINT32 SessionIndex = 0;
+	WSAOVERLAPPED	m_wsaOverlapped;		//Overlapped I/Oêµ¬ì¡°ì²´
+	WSABUF			m_wsaBuf;				//Overlapped I/Oì‘ì—… ë²„í¼
+	IOOperation		m_eOperation;			//ì‘ì—… ë™ì‘ ì¢…ë¥˜
+	UINT32			SessionIndex = 0;
 };
 
