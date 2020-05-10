@@ -3,6 +3,16 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PacketManager.cpp" />
+    <ClCompile Include="User.cpp" />
+    <ClCompile Include="Packet.cpp" />
+    <ClCompile Include="ServerNetwork\ClientInfo.cpp">
+      <Filter>ServerNetwork</Filter>
+    </ClCompile>
+    <ClCompile Include="UserManager.cpp" />
+    <ClCompile Include="ChatServer.cpp" />
+    <ClCompile Include="ServerNetwork\IOCPServer.cpp">
+      <Filter>ServerNetwork</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Packet.h" />

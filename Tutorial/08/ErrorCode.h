@@ -1,7 +1,9 @@
 #pragma once
 
-//TODO ¿¡·¯ ÄÚµå Áßº¹ »ç¿ëÇÏÁö ¾Êµµ·Ï ÇÑ´Ù
-enum class ERROR_CODE : unsigned short
+#include <cstdint>
+
+//TODO ì—ëŸ¬ ì½”ë“œ ì¤‘ë³µ ì‚¬ìš©í•˜ì§€ ì•Šë„ë¡ í•œë‹¤
+enum class ERROR_CODE : uint16_t
 {
 	NONE = 0,
 

@@ -3,22 +3,25 @@
 #include <iostream>
 
 const UINT16 SERVER_PORT = 11021;
-const UINT16 MAX_CLIENT = 3;		//ÃÑ Á¢¼ÓÇÒ¼ö ÀÖ´Â Å¬¶óÀÌ¾ğÆ® ¼ö
-const UINT32 MAX_IO_WORKER_THREAD = 4;  //¾²·¹µå Ç®¿¡ ³ÖÀ» ¾²·¹µå ¼ö
+const UINT16 MAX_CLIENT = 3;		//ì´ ì ‘ì†í• ìˆ˜ ìˆëŠ” í´ë¼ì´ì–¸íŠ¸ ìˆ˜
+const UINT32 MAX_IO_WORKER_THREAD = 4;  //ì“°ë ˆë“œ í’€ì— ë„£ì„ ì“°ë ˆë“œ ìˆ˜
 
 int main()
 {
+	SetConsoleOutputCP(CP_UTF8);
+	setvbuf(stdout, nullptr, _IOFBF, 1024);
+
 	ChatServer server;
 
-	//¼ÒÄÏÀ» ÃÊ±âÈ­
+	//ì†Œì¼“ì„ ì´ˆê¸°í™”
 	server.Init(MAX_IO_WORKER_THREAD);
 
-	//¼ÒÄÏ°ú ¼­¹ö ÁÖ¼Ò¸¦ ¿¬°áÇÏ°í µî·Ï ½ÃÅ²´Ù.
-	server.BindandListen(SERVER_PORT);
+	//ì†Œì¼“ê³¼ ì„œë²„ ì£¼ì†Œë¥¼ ì—°ê²°í•˜ê³  ë“±ë¡ ì‹œí‚¨ë‹¤.
+	server.BindAndListen(SERVER_PORT);
 
 	server.Run(MAX_CLIENT);
 
-	printf("¾Æ¹« Å°³ª ´©¸¦ ¶§±îÁö ´ë±âÇÕ´Ï´Ù\n");
+	std::cout << u8"ì•„ë¬´ í‚¤ë‚˜ ëˆ„ë¥¼ ë•Œê¹Œì§€ ëŒ€ê¸°í•©ë‹ˆë‹¤" << std::endl;
 	while (true)
 	{
 		std::string inputCmd;

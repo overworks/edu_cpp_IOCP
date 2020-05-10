@@ -1,39 +1,38 @@
+#include <iostream>
 #include <utility>
 #include <cstring>
 
-
+#include "User.h"
 #include "UserManager.h"
 #include "PacketManager.h"
 
-
-void PacketManager::Init(const UINT32 maxClient_)
+PacketManager::PacketManager(int maxClient)
 {
-	mRecvFuntionDictionary = std::unordered_map<int, PROCESS_RECV_PACKET_FUNCTION>();
+	mUserManager = new UserManager(maxClient);
 
 	mRecvFuntionDictionary[(int)PACKET_ID::SYS_USER_CONNECT] = &PacketManager::ProcessUserConnect;
-	mRecvFuntionDictionary[(int)PACKET_ID::SYS_USER_DISCONNECT] = &PacketManager::ProcessUserDisConnect;
+	mRecvFuntionDictionary[(int)PACKET_ID::SYS_USER_DISCONNECT] = &PacketManager::ProcessUserDisconnect;
 
 	mRecvFuntionDictionary[(int)PACKET_ID::LOGIN_REQUEST] = &PacketManager::ProcessLogin;
-					
-	CreateCompent(maxClient_);	
 }
 
-void PacketManager::CreateCompent(const UINT32 maxClient_)
+PacketManager::~PacketManager()
 {
-	mUserManager = new UserManager;
-	mUserManager->Init(maxClient_);	
+	delete mUserManager;
 }
 
-bool PacketManager::Run()
+bool
+PacketManager::Run()
 {	
-	//ÀÌ ºÎºÐÀ» ÆÐÅ¶ Ã³¸® ºÎºÐÀ¸·Î ÀÌµ¿ ½ÃÅ²´Ù.
+	// ì´ ë¶€ë¶„ì„ íŒ¨í‚· ì²˜ë¦¬ ë¶€ë¶„ìœ¼ë¡œ ì´ë™ ì‹œí‚¨ë‹¤.
 	mIsRunProcessThread = true;
 	mProcessThread = std::thread([this]() { ProcessPacket(); });
 
 	return true;
 }
 
-void PacketManager::End()
+void
+PacketManager::End()
 {
 	mIsRunProcessThread = false;
 
@@ -43,30 +42,32 @@ void PacketManager::End()
 	}
 }
 
-void PacketManager::ReceivePacketData(const UINT32 clientIndex_, const UINT32 size_, char* pData_)
+void
+PacketManager::ReceivePacketData(UINT32 clientIndex, UINT32 size, const char* pData)
 {
-	auto pUser = mUserManager->GetUserByConnIdx(clientIndex_);
-	pUser->SetPacketData(size_, pData_);
+	auto pUser = mUserManager->GetUserByConnIdx(clientIndex);
+	pUser->SetPacketData(size, pData);
 
-	EnqueuePacketData(clientIndex_);
+	EnqueuePacketData(clientIndex);
 }
 
-void PacketManager::ProcessPacket()
+void
+PacketManager::ProcessPacket()
 {
 	while (mIsRunProcessThread)
 	{
 		bool isIdle = true;
 
-		if (auto packetData = DequePacketData(); packetData.PacketId > (UINT16)PACKET_ID::SYS_END)
+		if (auto packetData = DequeuePacketData(); packetData != nullptr && packetData->PacketId > (UINT16)PACKET_ID::SYS_END)
 		{
 			isIdle = false;
-			ProcessRecvPacket(packetData.ClientIndex, packetData.PacketId, packetData.DataSize, packetData.pDataPtr);
+			ProcessRecvPacket(packetData->ClientIndex, packetData->PacketId, packetData->DataSize, packetData->pDataPtr);
 		}
 
-		if (auto packetData = DequeSystemPacketData(); packetData.PacketId != 0)
+		if (auto packetData = DequeueSystemPacketData(); packetData != nullptr && packetData->PacketId != 0)
 		{
 			isIdle = false;
-			ProcessRecvPacket(packetData.ClientIndex, packetData.PacketId, packetData.DataSize, packetData.pDataPtr);
+			ProcessRecvPacket(packetData->ClientIndex, packetData->PacketId, packetData->DataSize, packetData->pDataPtr);
 		}
 				
 		if(isIdle)
@@ -76,13 +77,14 @@ void PacketManager::ProcessPacket()
 	}
 }
 
-void PacketManager::EnqueuePacketData(const UINT32 clientIndex_)
+void
+PacketManager::EnqueuePacketData(UINT32 clientIndex)
 {
 	std::lock_guard<std::mutex> guard(mLock);
-	mInComingPacketUserIndex.push_back(clientIndex_);
+	mInComingPacketUserIndex.push_back(clientIndex);
 }
 
-PacketInfo PacketManager::DequePacketData()
+PacketInfoPtr PacketManager::DequeuePacketData()
 {
 	UINT32 userIndex = 0;
 
@@ -90,7 +92,7 @@ PacketInfo PacketManager::DequePacketData()
 		std::lock_guard<std::mutex> guard(mLock);
 		if (mInComingPacketUserIndex.empty())
 		{
-			return PacketInfo();
+			return nullptr;
 		}
 
 		userIndex = mInComingPacketUserIndex.front();
@@ -99,23 +101,25 @@ PacketInfo PacketManager::DequePacketData()
 
 	auto pUser = mUserManager->GetUserByConnIdx(userIndex);
 	auto packetData = pUser->GetPacket();
-	packetData.ClientIndex = userIndex;
+	if (packetData)
+	{
+		packetData->ClientIndex = userIndex;
+	}
 	return packetData;
 }
 
-void PacketManager::PushSystemPacket(PacketInfo packet_)
+void PacketManager::PushSystemPacket(const PacketInfoPtr& packet)
 {
 	std::lock_guard<std::mutex> guard(mLock);
-	mSystemPacketQueue.push_back(packet_);
+	mSystemPacketQueue.push_back(packet);
 }
 
-PacketInfo PacketManager::DequeSystemPacketData()
+PacketInfoPtr PacketManager::DequeueSystemPacketData()
 {
-	
 	std::lock_guard<std::mutex> guard(mLock);
 	if (mSystemPacketQueue.empty())
 	{
-		return PacketInfo();
+		return nullptr;
 	}
 
 	auto packetData = mSystemPacketQueue.front();
@@ -124,41 +128,41 @@ PacketInfo PacketManager::DequeSystemPacketData()
 	return packetData;
 }
 
-void PacketManager::ProcessRecvPacket(const UINT32 clientIndex_, const UINT16 packetId_, const UINT16 packetSize_, char* pPacket_)
+void PacketManager::ProcessRecvPacket(UINT32 clientIndex, UINT16 packetId, UINT16 packetSize, const char* pPacket)
 {
-	auto iter = mRecvFuntionDictionary.find(packetId_);
+	auto iter = mRecvFuntionDictionary.find(packetId);
 	if (iter != mRecvFuntionDictionary.end())
 	{
-		(this->*(iter->second))(clientIndex_, packetSize_, pPacket_);
+		(this->*(iter->second))(clientIndex, packetSize, pPacket);
 	}
-
 }
 
 
-void PacketManager::ProcessUserConnect(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void PacketManager::ProcessUserConnect(UINT32 clientIndex, UINT16 packetSize, const char* pPacket_)
 {
-	printf("[ProcessUserConnect] clientIndex: %d\n", clientIndex_);
-	auto pUser = mUserManager->GetUserByConnIdx(clientIndex_);
-	pUser->Clear();
+	std::cout << "[ProcessUserConnect] clientIndex: " << clientIndex << std::endl;
+	
+	mUserManager->GetUserByConnIdx(clientIndex)->Clear();
 }
 
-void PacketManager::ProcessUserDisConnect(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void PacketManager::ProcessUserDisconnect(UINT32 clientIndex, UINT16 packetSize, const char* pPacket)
 {
-	printf("[ProcessUserDisConnect] clientIndex: %d\n", clientIndex_);
-	ClearConnectionInfo(clientIndex_);
+	std::cout << "[ProcessUserDisConnect] clientIndex: " << clientIndex << std::endl;
+
+	ClearConnectionInfo(clientIndex);
 }
 
-void PacketManager::ProcessLogin(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void PacketManager::ProcessLogin(UINT32 clientIndex, UINT16 packetSize, const char* pPacket)
 { 
-	if (LOGIN_REQUEST_PACKET_SZIE != packetSize_)
+	if (LOGIN_REQUEST_PACKET_SZIE != packetSize)
 	{
 		return;
 	}
 
-	auto pLoginReqPacket = reinterpret_cast<LOGIN_REQUEST_PACKET*>(pPacket_);
+	auto pLoginReqPacket = reinterpret_cast<const LOGIN_REQUEST_PACKET*>(pPacket);
 
-	auto pUserID = pLoginReqPacket->UserID;
-	printf("requested user id = %s\n", pUserID);
+	std::string pUserID(pLoginReqPacket->UserID);
+	std::cout << "requested user id = " << pUserID << std::endl;
 
 	LOGIN_RESPONSE_PACKET loginResPacket;
 	loginResPacket.PacketId = (UINT16)PACKET_ID::LOGIN_RESPONSE;
@@ -166,34 +170,34 @@ void PacketManager::ProcessLogin(UINT32 clientIndex_, UINT16 packetSize_, char* 
 
 	if (mUserManager->GetCurrentUserCnt() >= mUserManager->GetMaxUserCnt()) 
 	{ 
-		//Á¢¼ÓÀÚ¼ö°¡ ÃÖ´ë¼ö¸¦ Â÷ÁöÇØ¼­ Á¢¼ÓºÒ°¡
+		// ì ‘ì†ìžìˆ˜ê°€ ìµœëŒ€ìˆ˜ë¥¼ ì°¨ì§€í•´ì„œ ì ‘ì†ë¶ˆê°€
 		loginResPacket.Result = (UINT16)ERROR_CODE::LOGIN_USER_USED_ALL_OBJ;
-		SendPacketFunc(clientIndex_, sizeof(LOGIN_RESPONSE_PACKET) , (char*)&loginResPacket);
+		SendPacketFunc(clientIndex, sizeof(LOGIN_RESPONSE_PACKET), (const char*)&loginResPacket);
 		return;
 	}
 
-	//¿©±â¿¡¼­ ÀÌ¹Ì Á¢¼ÓµÈ À¯ÀúÀÎÁö È®ÀÎÇÏ°í, Á¢¼ÓµÈ À¯Àú¶ó¸é ½ÇÆÐÇÑ´Ù.
+	// ì—¬ê¸°ì—ì„œ ì´ë¯¸ ì ‘ì†ëœ ìœ ì €ì¸ì§€ í™•ì¸í•˜ê³ , ì ‘ì†ëœ ìœ ì €ë¼ë©´ ì‹¤íŒ¨í•œë‹¤.
 	if (mUserManager->FindUserIndexByID(pUserID) == -1) 
 	{ 
 		loginResPacket.Result = (UINT16)ERROR_CODE::NONE;
-		SendPacketFunc(clientIndex_, sizeof(LOGIN_RESPONSE_PACKET), (char*)&loginResPacket);
+		SendPacketFunc(clientIndex, sizeof(LOGIN_RESPONSE_PACKET), (const char*)&loginResPacket);
 	}
 	else 
 	{
-		//Á¢¼ÓÁßÀÎ À¯Àú¿©¼­ ½ÇÆÐ¸¦ ¹ÝÈ¯ÇÑ´Ù.
+		// ì ‘ì†ì¤‘ì¸ ìœ ì €ì—¬ì„œ ì‹¤íŒ¨ë¥¼ ë°˜í™˜í•œë‹¤.
 		loginResPacket.Result = (UINT16)ERROR_CODE::LOGIN_USER_ALREADY;
-		SendPacketFunc(clientIndex_, sizeof(LOGIN_RESPONSE_PACKET), (char*)&loginResPacket);
+		SendPacketFunc(clientIndex, sizeof(LOGIN_RESPONSE_PACKET), (const char*)&loginResPacket);
 		return;
 	}
 }
 
 
-void PacketManager::ClearConnectionInfo(INT32 clientIndex_) 
+void PacketManager::ClearConnectionInfo(UINT32 clientIndex) 
 {
-	auto pReqUser = mUserManager->GetUserByConnIdx(clientIndex_);
+	auto pReqUser = mUserManager->GetUserByConnIdx(clientIndex);
 		
 	if (pReqUser->GetDomainState() != User::DOMAIN_STATE::NONE) 
 	{
-		mUserManager->DeleteUserInfo(pReqUser);
+		mUserManager->DeleteUserInfo(pReqUser.get());
 	}
 }
