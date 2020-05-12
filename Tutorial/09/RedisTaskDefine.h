@@ -1,11 +1,9 @@
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
+#include "Packet.h"
 #include "ErrorCode.h"
 
-enum class RedisTaskID : UINT16
+enum class RedisTaskID : uint16_t
 {
 	INVALID = 0,
 
@@ -17,16 +15,17 @@ enum class RedisTaskID : UINT16
 
 struct RedisTask
 {
-	UINT32 UserIndex = 0;
+	uint32_t UserIndex = 0;
 	RedisTaskID TaskID = RedisTaskID::INVALID;
-	UINT16 DataSize = 0;
+	uint16_t DataSize = 0;
 	char* pData = nullptr;	
 
 	void Release()
 	{
-		if (pData != nullptr)
+		if (pData)
 		{
 			delete[] pData;
+			pData = nullptr;
 		}
 	}
 };
@@ -44,7 +43,7 @@ struct RedisLoginReq
 
 struct RedisLoginRes
 {
-	UINT16 Result = (UINT16)ERROR_CODE::NONE;
+	uint16_t Result = (uint16_t)ERROR_CODE::NONE;
 };
 
-#pragma pack(pop) //¿ßø° º≥¡§µ» ∆–≈∑º≥¡§¿Ã ªÁ∂Û¡¸
+#pragma pack(pop) //ÏúÑÏóê ÏÑ§Ï†ïÎêú Ìå®ÌÇπÏÑ§Ï†ïÏù¥ ÏÇ¨ÎùºÏßê

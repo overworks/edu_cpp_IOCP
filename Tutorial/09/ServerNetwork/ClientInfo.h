@@ -175,13 +175,13 @@ public:
 	}
 
 	// 1개의 스레드에서만 호출해야 한다!
-	bool SendMsg(const UINT32 dataSize_, char* pMsg_)
+	bool SendMsg(UINT32 dataSize, const char* pMsg)
 	{	
 		auto sendOverlappedEx = new stOverlappedEx;
 		ZeroMemory(sendOverlappedEx, sizeof(stOverlappedEx));
-		sendOverlappedEx->m_wsaBuf.len = dataSize_;
-		sendOverlappedEx->m_wsaBuf.buf = new char[dataSize_];
-		CopyMemory(sendOverlappedEx->m_wsaBuf.buf, pMsg_, dataSize_);
+		sendOverlappedEx->m_wsaBuf.len = dataSize;
+		sendOverlappedEx->m_wsaBuf.buf = new char[dataSize];
+		CopyMemory(sendOverlappedEx->m_wsaBuf.buf, pMsg, dataSize);
 		sendOverlappedEx->m_eOperation = IOOperation::SEND;
 		
 		std::lock_guard<std::mutex> guard(mSendLock);

@@ -3,6 +3,13 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PacketManager.cpp" />
+    <ClCompile Include="ChatServer.cpp" />
+    <ClCompile Include="ServerNetwork\IOCPServer.cpp">
+      <Filter>ServerNetwork</Filter>
+    </ClCompile>
+    <ClCompile Include="User.cpp" />
+    <ClCompile Include="RedisManager.cpp" />
+    <ClCompile Include="UserManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Packet.h" />

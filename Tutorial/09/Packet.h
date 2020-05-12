@@ -1,49 +1,17 @@
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
-struct RawPacketData
-{
-	UINT32 ClientIndex = 0;
-	UINT32 DataSize = 0;
-	char* pPacketData = nullptr;
-
-	void Set(RawPacketData& vlaue)
-	{
-		ClientIndex = vlaue.ClientIndex;
-		DataSize = vlaue.DataSize;
-
-		pPacketData = new char[vlaue.DataSize];
-		CopyMemory(pPacketData, vlaue.pPacketData, vlaue.DataSize);
-	}
-
-	void Set(UINT32 clientIndex_, UINT32 dataSize_, char* pData)
-	{
-		ClientIndex = clientIndex_;
-		DataSize = dataSize_;
-
-		pPacketData = new char[dataSize_];
-		CopyMemory(pPacketData, pData, dataSize_);
-	}
-
-	void Release()
-	{
-		delete pPacketData;
-	}
-};
-
+#include <cstdint>
 
 struct PacketInfo
 {
-	UINT32 ClientIndex = 0;
-	UINT16 PacketId = 0;
-	UINT16 DataSize = 0;
+	uint32_t ClientIndex = 0;
+	uint16_t PacketId = 0;
+	uint16_t DataSize = 0;
 	char* pDataPtr = nullptr;
 };
 
 
-enum class  PACKET_ID : UINT16
+enum class PACKET_ID : uint16_t
 {
 	//SYSTEM
 	SYS_USER_CONNECT = 11,
@@ -72,59 +40,59 @@ enum class  PACKET_ID : UINT16
 #pragma pack(push,1)
 struct PACKET_HEADER
 {
-	UINT16 PacketLength;
-	UINT16 PacketId;
-	UINT8 Type; //æ–√‡ø©∫Œ æœ»£»≠ø©∫Œ µÓ º”º∫¿ª æÀæ∆≥ª¥¬ ∞™
+	uint16_t PacketLength;
+	uint16_t PacketId;
+	uint8_t Type; //ÏïïÏ∂ïÏó¨Î∂Ä ÏïîÌò∏ÌôîÏó¨Î∂Ä Îì± ÏÜçÏÑ±ÏùÑ ÏïåÏïÑÎÇ¥Îäî Í∞í
 };
 
-const UINT32 PACKET_HEADER_LENGTH = sizeof(PACKET_HEADER);
+constexpr uint32_t PACKET_HEADER_LENGTH = sizeof(PACKET_HEADER);
 
-//- ∑Œ±◊¿Œ ø‰√ª
-const int MAX_USER_ID_LEN = 32;
-const int MAX_USER_PW_LEN = 32;
+//- Î°úÍ∑∏Ïù∏ ÏöîÏ≤≠
+constexpr int MAX_USER_ID_LEN = 32;
+constexpr int MAX_USER_PW_LEN = 32;
 
 struct LOGIN_REQUEST_PACKET : public PACKET_HEADER
 {
 	char UserID[MAX_USER_ID_LEN + 1];
 	char UserPW[MAX_USER_PW_LEN + 1];
 };
-const size_t LOGIN_REQUEST_PACKET_SZIE = sizeof(LOGIN_REQUEST_PACKET);
+const size_t LOGIN_REQUEST_PACKET_SIZE = sizeof(LOGIN_REQUEST_PACKET);
 
 
 struct LOGIN_RESPONSE_PACKET : public PACKET_HEADER
 {
-	UINT16 Result;
+	uint16_t Result;
 };
 
 
 
-//- ∑Îø° µÈæÓ∞°±‚ ø‰√ª
+//- Î£∏Ïóê Îì§Ïñ¥Í∞ÄÍ∏∞ ÏöîÏ≤≠
 //const int MAX_ROOM_TITLE_SIZE = 32;
 struct ROOM_ENTER_REQUEST_PACKET : public PACKET_HEADER
 {
-	INT32 RoomNumber;
+	int32_t RoomNumber;
 };
 
 struct ROOM_ENTER_RESPONSE_PACKET : public PACKET_HEADER
 {
-	INT16 Result;
+	int16_t Result;
 	//char RivalUserID[MAX_USER_ID_LEN + 1] = { 0, };
 };
 
 
-//- ∑Î ≥™∞°±‚ ø‰√ª
+//- Î£∏ ÎÇòÍ∞ÄÍ∏∞ ÏöîÏ≤≠
 struct ROOM_LEAVE_REQUEST_PACKET : public PACKET_HEADER
 {
 };
 
 struct ROOM_LEAVE_RESPONSE_PACKET : public PACKET_HEADER
 {
-	INT16 Result;
+	int16_t Result;
 };
 
 
 
-// ∑Î √§∆√
+// Î£∏ Ï±ÑÌåÖ
 const int MAX_CHAT_MSG_SIZE = 256;
 struct ROOM_CHAT_REQUEST_PACKET : public PACKET_HEADER
 {
@@ -133,7 +101,7 @@ struct ROOM_CHAT_REQUEST_PACKET : public PACKET_HEADER
 
 struct ROOM_CHAT_RESPONSE_PACKET : public PACKET_HEADER
 {
-	INT16 Result;
+	int16_t Result;
 };
 
 struct ROOM_CHAT_NOTIFY_PACKET : public PACKET_HEADER
@@ -141,5 +109,5 @@ struct ROOM_CHAT_NOTIFY_PACKET : public PACKET_HEADER
 	char UserID[MAX_USER_ID_LEN + 1] = { 0, };
 	char Msg[MAX_CHAT_MSG_SIZE + 1] = { 0, };
 };
-#pragma pack(pop) //¿ßø° º≥¡§µ» ∆–≈∑º≥¡§¿Ã ªÁ∂Û¡¸
+#pragma pack(pop) //ÏúÑÏóê ÏÑ§Ï†ïÎêú Ìå®ÌÇπÏÑ§Ï†ïÏù¥ ÏÇ¨ÎùºÏßê
 
