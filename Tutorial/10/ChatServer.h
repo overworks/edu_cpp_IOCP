@@ -1,70 +1,25 @@
 #pragma once
 
 #include "./ServerNetwork/IOCPServer.h"
-#include "PacketManager.h"
-#include "Packet.h"
 
-#include <vector>
-#include <deque>
-#include <memory>
-#include <thread>
-#include <mutex>
+//TODO redis ì—°ë™. hiredis í¬í•¨í•˜ê¸°
 
-//TODO redis ¿¬µ¿. hiredis Æ÷ÇÔÇÏ±â
+class PacketManager;
 
 class ChatServer : public IOCPServer
 {
 public:
-	ChatServer() = default;
-	virtual ~ChatServer() = default;
-	
+	ChatServer();
+	virtual ~ChatServer();
 
-	virtual void OnConnect(const UINT32 clientIndex_) override 
-	{
-		printf("[OnConnect] Å¬¶óÀÌ¾ðÆ®: Index(%d)\n", clientIndex_);
+	void Run(int maxClient);
+	void End();
 
-		PacketInfo packet{ clientIndex_, (UINT16)PACKET_ID::SYS_USER_CONNECT, 0 };
-		m_pPacketManager->PushSystemPacket(packet);
-	}
+protected:
+	virtual void OnConnect(uint32_t clientIndex) override;
+	virtual void OnClose(uint32_t clientIndex) override;
+	virtual void OnReceive(uint32_t clientIndex, uint32_t size, const char* pData) override;
 
-	virtual void OnClose(const UINT32 clientIndex_) override 
-	{
-		printf("[OnClose] Å¬¶óÀÌ¾ðÆ®: Index(%d)\n", clientIndex_);
-
-		PacketInfo packet{ clientIndex_, (UINT16)PACKET_ID::SYS_USER_DISCONNECT, 0 };
-		m_pPacketManager->PushSystemPacket(packet);
-	}
-
-	virtual void OnReceive(const UINT32 clientIndex_, const UINT32 size_, char* pData_) override  
-	{
-		printf("[OnReceive] Å¬¶óÀÌ¾ðÆ®: Index(%d), dataSize(%d)\n", clientIndex_, size_);
-
-		m_pPacketManager->ReceivePacketData(clientIndex_, size_, pData_);
-	}
-
-	void Run(const UINT32 maxClient)
-	{
-		auto sendPacketFunc = [&](UINT32 clientIndex_, UINT16 packetSize, char* pSendPacket)
-		{
-			SendMsg(clientIndex_, packetSize, pSendPacket);
-		};
-
-		m_pPacketManager = std::make_unique<PacketManager>();
-		m_pPacketManager->SendPacketFunc = sendPacketFunc;
-		m_pPacketManager->Init(maxClient);		
-		m_pPacketManager->Run();
-		
-		StartServer(maxClient);
-	}
-
-	void End()
-	{
-		m_pPacketManager->End();
-		
-		DestroyThread();
-	}
-
-
-private:	
-	std::unique_ptr<PacketManager> m_pPacketManager;
+private:
+	PacketManager* mPacketManager;
 };

@@ -1,61 +1,85 @@
+#include <iostream>
 #include <utility>
 #include <cstring>
 
-
+#include "User.h"
 #include "UserManager.h"
+#include "Room.h"
 #include "RoomManager.h"
 #include "PacketManager.h"
 #include "RedisManager.h"
 
-
-void PacketManager::Init(const UINT32 maxClient_)
+PacketManager::~PacketManager()
 {
-	mRecvFuntionDictionary = std::unordered_map<int, PROCESS_RECV_PACKET_FUNCTION>();
+	Release();
+}
+
+void
+PacketManager::Release()
+{
+	if (mRedisMgr)
+	{
+		delete mRedisMgr;
+	}
+
+	if (mUserManager)
+	{
+		delete mUserManager;
+	}
+
+	if (mRoomManager)
+	{
+		delete mRoomManager;
+	}
+}
+
+void
+PacketManager::Init(uint32_t maxClient, PacketManager::SendPacketFunc sendPacketFunc)
+{
+	Release();
+
+	mSendPacketFunc = sendPacketFunc;
+
+	mRedisMgr = new RedisManager;// std::make_unique<RedisManager>();
+	mUserManager = new UserManager(maxClient);
+	mRoomManager = new RoomManager(StartRoomNumber, MaxRoomCount, MaxRoomCount, sendPacketFunc);
+
+	RegisterPacket();
+}
+
+void
+PacketManager::RegisterPacket()
+{
+	mRecvFuntionDictionary.clear();
 
 	mRecvFuntionDictionary[(int)PACKET_ID::SYS_USER_CONNECT] = &PacketManager::ProcessUserConnect;
-	mRecvFuntionDictionary[(int)PACKET_ID::SYS_USER_DISCONNECT] = &PacketManager::ProcessUserDisConnect;
+	mRecvFuntionDictionary[(int)PACKET_ID::SYS_USER_DISCONNECT] = &PacketManager::ProcessUserDisconnect;
 
 	mRecvFuntionDictionary[(int)PACKET_ID::LOGIN_REQUEST] = &PacketManager::ProcessLogin;
 	mRecvFuntionDictionary[(int)RedisTaskID::RESPONSE_LOGIN] = &PacketManager::ProcessLoginDBResult;
-	
+
 	mRecvFuntionDictionary[(int)PACKET_ID::ROOM_ENTER_REQUEST] = &PacketManager::ProcessEnterRoom;
 	mRecvFuntionDictionary[(int)PACKET_ID::ROOM_LEAVE_REQUEST] = &PacketManager::ProcessLeaveRoom;
 	mRecvFuntionDictionary[(int)PACKET_ID::ROOM_CHAT_REQUEST] = &PacketManager::ProcessRoomChatMessage;
-				
-	CreateCompent(maxClient_);
-
-	mRedisMgr = new RedisManager;// std::make_unique<RedisManager>();
 }
 
-void PacketManager::CreateCompent(const UINT32 maxClient_)
-{
-	mUserManager = new UserManager;
-	mUserManager->Init(maxClient_);
-
-		
-	UINT32 startRoomNummber = 0;
-	UINT32 maxRoomCount = 10;
-	UINT32 maxRoomUserCount = 4;
-	mRoomManager = new RoomManager;
-	mRoomManager->SendPacketFunc = SendPacketFunc;
-	mRoomManager->Init(startRoomNummber, maxRoomCount, maxRoomUserCount);
-}
-
-bool PacketManager::Run()
+bool
+PacketManager::Run()
 {	
 	if (mRedisMgr->Run("127.0.0.1", 6379, 1) == false)
 	{
 		return false;
 	}
 
-	//¿Ã ∫Œ∫–¿ª ∆–≈∂ √≥∏Æ ∫Œ∫–¿∏∑Œ ¿Ãµø Ω√≈≤¥Ÿ.
+	//Ïù¥ Î∂ÄÎ∂ÑÏùÑ Ìå®ÌÇ∑ Ï≤òÎ¶¨ Î∂ÄÎ∂ÑÏúºÎ°ú Ïù¥ÎèôÏãúÌÇ®Îã§.
 	mIsRunProcessThread = true;
 	mProcessThread = std::thread([this]() { ProcessPacket(); });
 
 	return true;
 }
 
-void PacketManager::End()
+void
+PacketManager::End()
 {
 	mRedisMgr->End();
 
@@ -67,14 +91,14 @@ void PacketManager::End()
 	}
 }
 
-void PacketManager::ClearConnectionInfo(INT32 clientIndex_)
+void
+PacketManager::ClearConnectionInfo(int clientIndex)
 {
-	auto pReqUser = mUserManager->GetUserByConnIdx(clientIndex_);
+	auto pReqUser = mUserManager->GetUserByConnIdx(clientIndex);
 
 	if (pReqUser->GetDomainState() == User::DOMAIN_STATE::ROOM)
 	{
-		auto roomNum = pReqUser->GetCurrentRoom();
-		mRoomManager->LeaveUser(roomNum, pReqUser);
+		mRoomManager->LeaveUser(pReqUser);
 	}
 
 	if (pReqUser->GetDomainState() != User::DOMAIN_STATE::NONE)
@@ -83,23 +107,26 @@ void PacketManager::ClearConnectionInfo(INT32 clientIndex_)
 	}
 }
 
-void PacketManager::ReceivePacketData(const UINT32 clientIndex_, const UINT32 size_, char* pData_)
+void
+PacketManager::ReceivePacketData(int clientIndex, uint32_t dataSize, const char* pData)
 {
-	auto pUser = mUserManager->GetUserByConnIdx(clientIndex_);
-	pUser->SetPacketData(size_, pData_);
+	auto pUser = mUserManager->GetUserByConnIdx(clientIndex);
+	pUser->SetPacketData(dataSize, pData);
 
-	EnqueuePacketData(clientIndex_);
+	EnqueuePacketData(clientIndex);
 }
 
-void PacketManager::EnqueuePacketData(const UINT32 clientIndex_)
+void
+PacketManager::EnqueuePacketData(int clientIndex)
 {
 	std::lock_guard<std::mutex> guard(mLock);
-	mInComingPacketUserIndex.push_back(clientIndex_);
+	mInComingPacketUserIndex.push(clientIndex);
 }
 
-PacketInfo PacketManager::DequePacketData()
+PacketInfo
+PacketManager::DequePacketData()
 {
-	UINT32 userIndex = 0;
+	int userIndex = 0;
 
 	{
 		std::lock_guard<std::mutex> guard(mLock);
@@ -108,8 +135,8 @@ PacketInfo PacketManager::DequePacketData()
 			return PacketInfo();
 		}
 
-		userIndex = mInComingPacketUserIndex.front();
-		mInComingPacketUserIndex.pop_front();
+		userIndex = static_cast<int>(mInComingPacketUserIndex.front());
+		mInComingPacketUserIndex.pop();
 	}
 
 	auto pUser = mUserManager->GetUserByConnIdx(userIndex);
@@ -118,15 +145,14 @@ PacketInfo PacketManager::DequePacketData()
 	return packetData;
 }
 
-void PacketManager::PushSystemPacket(PacketInfo packet_)
+void PacketManager::PushSystemPacket(const PacketInfo& packet)
 {
 	std::lock_guard<std::mutex> guard(mLock);
-	mSystemPacketQueue.push_back(packet_);
+	mSystemPacketQueue.push(packet);
 }
 
 PacketInfo PacketManager::DequeSystemPacketData()
 {
-
 	std::lock_guard<std::mutex> guard(mLock);
 	if (mSystemPacketQueue.empty())
 	{
@@ -134,19 +160,20 @@ PacketInfo PacketManager::DequeSystemPacketData()
 	}
 
 	auto packetData = mSystemPacketQueue.front();
-	mSystemPacketQueue.pop_front();
+	mSystemPacketQueue.pop();
 
 	return packetData;
 }
 
 
-void PacketManager::ProcessPacket()
+void
+PacketManager::ProcessPacket()
 {
 	while (mIsRunProcessThread)
 	{
 		bool isIdle = true;
 
-		if (auto packetData = DequePacketData(); packetData.PacketId > (UINT16)PACKET_ID::SYS_END)
+		if (auto packetData = DequePacketData(); packetData.PacketId > (uint16_t)PACKET_ID::SYS_END)
 		{
 			isIdle = false;
 			ProcessRecvPacket(packetData.ClientIndex, packetData.PacketId, packetData.DataSize, packetData.pDataPtr);
@@ -158,11 +185,11 @@ void PacketManager::ProcessPacket()
 			ProcessRecvPacket(packetData.ClientIndex, packetData.PacketId, packetData.DataSize, packetData.pDataPtr);
 		}
 
-		if (auto task = mRedisMgr->TakeResponseTask(); task.TaskID != RedisTaskID::INVALID)
+		if (auto task = mRedisMgr->PopResponseTask(); task != nullptr && task->TaskID != RedisTaskID::INVALID)
 		{
 			isIdle = false;
-			ProcessRecvPacket(task.UserIndex, (UINT16)task.TaskID, task.DataSize, task.pData);
-			task.Release();
+			ProcessRecvPacket(task->UserIndex, static_cast<uint16_t>(task->TaskID), task->DataSize, task->pData);
+			//task->Release();
 		}
 
 		if(isIdle)
@@ -172,163 +199,167 @@ void PacketManager::ProcessPacket()
 	}
 }
 
-void PacketManager::ProcessRecvPacket(const UINT32 clientIndex_, const UINT16 packetId_, const UINT16 packetSize_, char* pPacket_)
+void
+PacketManager::ProcessRecvPacket(uint32_t clientIndex, uint16_t packetId, uint16_t packetSize, const char* pPacket)
 {
-	auto iter = mRecvFuntionDictionary.find(packetId_);
+	auto iter = mRecvFuntionDictionary.find(packetId);
 	if (iter != mRecvFuntionDictionary.end())
 	{
-		(this->*(iter->second))(clientIndex_, packetSize_, pPacket_);
+		(this->*(iter->second))(clientIndex, packetSize, pPacket);
 	}
 
 }
 
-void PacketManager::ProcessUserConnect(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void
+PacketManager::ProcessUserConnect(uint32_t clientIndex, uint16_t packetSize, const char* pPacket)
 {
-	printf("[ProcessUserConnect] clientIndex: %d\n", clientIndex_);
-	auto pUser = mUserManager->GetUserByConnIdx(clientIndex_);
+	std::cout << "[ProcessUserConnect] clientIndex: " << clientIndex << std::endl;
+	auto pUser = mUserManager->GetUserByConnIdx(clientIndex);
 	pUser->Clear();
 }
 
-void PacketManager::ProcessUserDisConnect(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void
+PacketManager::ProcessUserDisconnect(uint32_t clientIndex, uint16_t packetSize, const char* pPacket)
 {
-	printf("[ProcessUserDisConnect] clientIndex: %d\n", clientIndex_);
-	ClearConnectionInfo(clientIndex_);
+	std::cout << "[ProcessUserDisConnect] clientIndex: " << clientIndex << std::endl;
+	ClearConnectionInfo((int)clientIndex);
 }
 
-void PacketManager::ProcessLogin(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void
+PacketManager::ProcessLogin(uint32_t clientIndex, uint16_t packetSize, const char* pPacket)
 { 
-	if (LOGIN_REQUEST_PACKET_SZIE != packetSize_)
+	if (LOGIN_REQUEST_PACKET_SIZE != packetSize)
 	{
 		return;
 	}
 
-	auto pLoginReqPacket = reinterpret_cast<LOGIN_REQUEST_PACKET*>(pPacket_);
+	auto pLoginReqPacket = reinterpret_cast<const LOGIN_REQUEST_PACKET*>(pPacket);
 
-	auto pUserID = pLoginReqPacket->UserID;
-	printf("requested user id = %s\n", pUserID);
+	std::string userID(pLoginReqPacket->UserID);
+	std::cout << "requested user id = " << userID << std::endl;
 
 	LOGIN_RESPONSE_PACKET loginResPacket;
-	loginResPacket.PacketId = (UINT16)PACKET_ID::LOGIN_RESPONSE;
+	loginResPacket.PacketId = (uint16_t)PACKET_ID::LOGIN_RESPONSE;
 	loginResPacket.PacketLength = sizeof(LOGIN_RESPONSE_PACKET);
 
 	if (mUserManager->GetCurrentUserCnt() >= mUserManager->GetMaxUserCnt()) 
 	{ 
-		//¡¢º”¿⁄ºˆ∞° √÷¥Îºˆ∏¶ ¬˜¡ˆ«ÿº≠ ¡¢º”∫“∞°
-		loginResPacket.Result = (UINT16)ERROR_CODE::LOGIN_USER_USED_ALL_OBJ;
-		SendPacketFunc(clientIndex_, sizeof(LOGIN_RESPONSE_PACKET) , (char*)&loginResPacket);
+		//Ï†ëÏÜçÏûêÏàòÍ∞Ä ÏµúÎåÄÏàòÎ•º Ï∞®ÏßÄÌï¥ÏÑú Ï†ëÏÜçÎ∂àÍ∞Ä
+		loginResPacket.Result = static_cast<uint16_t>(ERROR_CODE::LOGIN_USER_USED_ALL_OBJ);
+		mSendPacketFunc(clientIndex, sizeof(LOGIN_RESPONSE_PACKET) , reinterpret_cast<const char*>(&loginResPacket));
 		return;
 	}
 
-	//ø©±‚ø°º≠ ¿ÃπÃ ¡¢º”µ» ¿Ø¿˙¿Œ¡ˆ »Æ¿Œ«œ∞Ì, ¡¢º”µ» ¿Ø¿˙∂Û∏È Ω«∆–«—¥Ÿ.
-	if (mUserManager->FindUserIndexByID(pUserID) == -1) 
-	{ 
+	//Ïó¨Í∏∞ÏóêÏÑú Ïù¥ÎØ∏ Ï†ëÏÜçÎêú Ïú†Ï†ÄÏù∏ÏßÄ ÌôïÏù∏ÌïòÍ≥†, Ï†ëÏÜçÎêú Ïú†Ï†ÄÎùºÎ©¥ Ïã§Ìå®ÌïúÎã§.
+	if (mUserManager->FindUserIndexByID(userID) == -1) 
+	{
 		RedisLoginReq dbReq;
-		CopyMemory(dbReq.UserID, pLoginReqPacket->UserID, (MAX_USER_ID_LEN + 1));
-		CopyMemory(dbReq.UserPW, pLoginReqPacket->UserPW, (MAX_USER_PW_LEN + 1));
+		memcpy(dbReq.UserID, pLoginReqPacket->UserID, (MAX_USER_ID_LEN + 1));
+		memcpy(dbReq.UserPW, pLoginReqPacket->UserPW, (MAX_USER_PW_LEN + 1));
 
-		RedisTask task;
-		task.UserIndex = clientIndex_;
-		task.TaskID = RedisTaskID::REQUEST_LOGIN;
-		task.DataSize = sizeof(RedisLoginReq);
-		task.pData = new char[task.DataSize];
-		CopyMemory(task.pData, (char*)&dbReq, task.DataSize);
-		mRedisMgr->PushTask(task);
+		RedisTaskPtr task = std::make_shared<RedisTask>();
+		task->UserIndex = clientIndex;
+		task->TaskID = RedisTaskID::REQUEST_LOGIN;
+		task->DataSize = sizeof(RedisLoginReq);
+		task->pData = new char[task->DataSize];
+		memcpy(task->pData, &dbReq, task->DataSize);
+		mRedisMgr->PushRequest(task);
 
-		printf("Login To Redis user id = %s\n", pUserID);
+		mUserManager->AddUser(userID, static_cast<int>(clientIndex));
+
+		std::cout << "Login To Redis user id = " << userID << std::endl;
 	}
 	else 
 	{
-		//¡¢º”¡ﬂ¿Œ ¿Ø¿˙ø©º≠ Ω«∆–∏¶ π›»Ø«—¥Ÿ.
-		loginResPacket.Result = (UINT16)ERROR_CODE::LOGIN_USER_ALREADY;
-		SendPacketFunc(clientIndex_, sizeof(LOGIN_RESPONSE_PACKET), (char*)&loginResPacket);
+		//Ï†ëÏÜçÏ§ëÏù∏ Ïú†Ï†ÄÏó¨ÏÑú Ïã§Ìå®Î•º Î∞òÌôòÌïúÎã§.
+		loginResPacket.Result = static_cast<uint16_t>(ERROR_CODE::LOGIN_USER_ALREADY);
+		mSendPacketFunc(clientIndex, sizeof(LOGIN_RESPONSE_PACKET), reinterpret_cast<const char*>(&loginResPacket));
 		return;
 	}
 }
 
-void PacketManager::ProcessLoginDBResult(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void PacketManager::ProcessLoginDBResult(uint32_t clientIndex, uint16_t packetSize, const char* pPacket)
 {
-	printf("ProcessLoginDBResult. UserIndex: %d\n", clientIndex_);
+	std::cout << "ProcessLoginDBResult. UserIndex: " << clientIndex << std::endl;
 
-	auto pBody = (RedisLoginRes*)pPacket_;
+	auto pBody = reinterpret_cast<const RedisLoginRes*>(pPacket);
 
-	if (pBody->Result == (UINT16)ERROR_CODE::NONE)
+	if (pBody->Result == static_cast<uint16_t>(ERROR_CODE::NONE))
 	{
-		//∑Œ±◊¿Œ øœ∑·∑Œ ∫Ø∞Ê«—¥Ÿ
+		//Î°úÍ∑∏Ïù∏ ÏôÑÎ£åÎ°ú Î≥ÄÍ≤ΩÌïúÎã§
 	}
 
 	LOGIN_RESPONSE_PACKET loginResPacket;
-	loginResPacket.PacketId = (UINT16)PACKET_ID::LOGIN_RESPONSE;
+	loginResPacket.PacketId = static_cast<uint16_t>(PACKET_ID::LOGIN_RESPONSE);
 	loginResPacket.PacketLength = sizeof(LOGIN_RESPONSE_PACKET);
 	loginResPacket.Result = pBody->Result;
-	SendPacketFunc(clientIndex_, sizeof(LOGIN_RESPONSE_PACKET), (char*)&loginResPacket);
+	mSendPacketFunc(clientIndex, sizeof(LOGIN_RESPONSE_PACKET), reinterpret_cast<const char*>(&loginResPacket));
 }
 
 
-void PacketManager::ProcessEnterRoom(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void PacketManager::ProcessEnterRoom(uint32_t clientIndex, uint16_t packetSize, const char* pPacket)
 {
-	UNREFERENCED_PARAMETER(packetSize_);
+	//UNREFERENCED_PARAMETER(packetSize);
 
-	auto pRoomEnterReqPacket = reinterpret_cast<ROOM_ENTER_REQUEST_PACKET*>(pPacket_);
-	auto pReqUser = mUserManager->GetUserByConnIdx(clientIndex_);
+	auto pReqUser = mUserManager->GetUserByConnIdx(static_cast<int>(clientIndex));
 
-	if (!pReqUser || pReqUser == nullptr) 
+	if (!pReqUser)
 	{
 		return;
 	}
-				
-	ROOM_ENTER_RESPONSE_PACKET roomEnterResPacket;
-	roomEnterResPacket.PacketId = (UINT16)PACKET_ID::ROOM_ENTER_RESPONSE;
-	roomEnterResPacket.PacketLength = sizeof(ROOM_ENTER_RESPONSE_PACKET);
-				
-	roomEnterResPacket.Result = mRoomManager->EnterUser(pRoomEnterReqPacket->RoomNumber, pReqUser);
+	
+	auto pRoomEnterReqPacket = reinterpret_cast<const ROOM_ENTER_REQUEST_PACKET*>(pPacket);
+	auto result = mRoomManager->EnterUser(pRoomEnterReqPacket->RoomNumber, pReqUser);
 
-	SendPacketFunc(clientIndex_, sizeof(ROOM_ENTER_RESPONSE_PACKET), (char*)&roomEnterResPacket);
-	printf("Response Packet Sended");
+	ROOM_ENTER_RESPONSE_PACKET roomEnterResPacket;
+	roomEnterResPacket.PacketId = static_cast<uint16_t>(PACKET_ID::ROOM_ENTER_RESPONSE);
+	roomEnterResPacket.PacketLength = sizeof(ROOM_ENTER_RESPONSE_PACKET);			
+	roomEnterResPacket.Result = static_cast<uint16_t>(result);
+
+	mSendPacketFunc(clientIndex, sizeof(ROOM_ENTER_RESPONSE_PACKET), reinterpret_cast<const char*>(&roomEnterResPacket));
+	std::cout << "Response Packet Sended" << std::endl;
 }
 
 
-void PacketManager::ProcessLeaveRoom(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void PacketManager::ProcessLeaveRoom(uint32_t clientIndex, uint16_t packetSize, const char* pPacket)
 {
-	UNREFERENCED_PARAMETER(packetSize_);
-	UNREFERENCED_PARAMETER(pPacket_);
+	//UNREFERENCED_PARAMETER(packetSize_);
+	//UNREFERENCED_PARAMETER(pPacket_);
 
 	ROOM_LEAVE_RESPONSE_PACKET roomLeaveResPacket;
-	roomLeaveResPacket.PacketId = (UINT16)PACKET_ID::ROOM_LEAVE_RESPONSE;
+	roomLeaveResPacket.PacketId = static_cast<uint16_t>(PACKET_ID::ROOM_LEAVE_RESPONSE);
 	roomLeaveResPacket.PacketLength = sizeof(ROOM_LEAVE_RESPONSE_PACKET);
 
-	auto reqUser = mUserManager->GetUserByConnIdx(clientIndex_);
-	auto roomNum = reqUser->GetCurrentRoom();
-				
-	//TODO Roomæ»¿« UserList∞¥√º¿« ∞™ »Æ¿Œ«œ±‚
-	roomLeaveResPacket.Result = mRoomManager->LeaveUser(roomNum, reqUser);
-	SendPacketFunc(clientIndex_, sizeof(ROOM_LEAVE_RESPONSE_PACKET), (char*)&roomLeaveResPacket);
+	auto reqUser = mUserManager->GetUserByConnIdx(clientIndex);
+	auto result = mRoomManager->LeaveUser(reqUser);
+
+	//TODO RoomÏïàÏùò UserListÍ∞ùÏ≤¥Ïùò Í∞í ÌôïÏù∏ÌïòÍ∏∞
+	roomLeaveResPacket.Result = static_cast<uint16_t>(result);
+	mSendPacketFunc(clientIndex, sizeof(ROOM_LEAVE_RESPONSE_PACKET), reinterpret_cast<const char*>(&roomLeaveResPacket));
 }
 
 
-void PacketManager::ProcessRoomChatMessage(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_)
+void PacketManager::ProcessRoomChatMessage(uint32_t clientIndex, uint16_t packetSize, const char* pPacket)
 {
-	UNREFERENCED_PARAMETER(packetSize_);
+	//UNREFERENCED_PARAMETER(packetSize_);
 
-	auto pRoomChatReqPacketet = reinterpret_cast<ROOM_CHAT_REQUEST_PACKET*>(pPacket_);
-		
+	auto pRoomChatReqPacketet = reinterpret_cast<const ROOM_CHAT_REQUEST_PACKET*>(pPacket);
+
 	ROOM_CHAT_RESPONSE_PACKET roomChatResPacket;
-	roomChatResPacket.PacketId = (UINT16)PACKET_ID::ROOM_CHAT_RESPONSE;
+	roomChatResPacket.PacketId = static_cast<uint16_t>(PACKET_ID::ROOM_CHAT_RESPONSE);
 	roomChatResPacket.PacketLength = sizeof(ROOM_CHAT_RESPONSE_PACKET);
-	roomChatResPacket.Result = (INT16)ERROR_CODE::NONE;
+	roomChatResPacket.Result = static_cast<int16_t>(ERROR_CODE::NONE);
 
-	auto reqUser = mUserManager->GetUserByConnIdx(clientIndex_);
-	auto roomNum = reqUser->GetCurrentRoom();
-				
-	auto pRoom = mRoomManager->GetRoomByNumber(roomNum);
+	auto reqUser = mUserManager->GetUserByConnIdx(static_cast<int>(clientIndex));
+	auto pRoom = mRoomManager->GetRoomByNumber(reqUser->GetCurrentRoom());
 	if (pRoom == nullptr)
 	{
-		roomChatResPacket.Result = (INT16)ERROR_CODE::CHAT_ROOM_INVALID_ROOM_NUMBER;
-		SendPacketFunc(clientIndex_, sizeof(ROOM_CHAT_RESPONSE_PACKET), (char*)&roomChatResPacket);
+		roomChatResPacket.Result = static_cast<int16_t>(ERROR_CODE::CHAT_ROOM_INVALID_ROOM_NUMBER);
+		mSendPacketFunc(clientIndex, sizeof(ROOM_CHAT_RESPONSE_PACKET), reinterpret_cast<const char*>(&roomChatResPacket));
 		return;
 	}
-		
-	SendPacketFunc(clientIndex_, sizeof(ROOM_CHAT_RESPONSE_PACKET), (char*)&roomChatResPacket);
 
-	pRoom->NotifyChat(clientIndex_, reqUser->GetUserId().c_str(), pRoomChatReqPacketet->Message);		
-}		   
+	mSendPacketFunc(clientIndex, sizeof(ROOM_CHAT_RESPONSE_PACKET), (char*)&roomChatResPacket);
 
+	pRoom->NotifyChat(clientIndex, reqUser->GetUserId(), pRoomChatReqPacketet->Message);
+}

@@ -3,7 +3,7 @@
 #include "Packet.h"
 
 #include <unordered_map>
-#include <deque>
+#include <queue>
 #include <functional>
 #include <thread>
 #include <mutex>
@@ -13,61 +13,59 @@ class UserManager;
 class RoomManager;
 class RedisManager;
 
-class PacketManager {
+constexpr int StartRoomNumber = 0;
+constexpr uint32_t MaxRoomCount = 10;
+constexpr uint32_t MaxRoomUserCount = 4;
+
+class PacketManager
+{
 public:
+	using SendPacketFunc = std::function<void(uint32_t, uint32_t, const char*)>;
+
 	PacketManager() = default;
-	~PacketManager() = default;
+	~PacketManager();
 
-	void Init(const UINT32 maxClient_);
-
+	void Init(uint32_t maxClient, SendPacketFunc sendPacketFunc);
 	bool Run();
-
 	void End();
-
-	void ReceivePacketData(const UINT32 clientIndex_, const UINT32 size_, char* pData_);
-
-	void PushSystemPacket(PacketInfo packet_);
-		
-	std::function<void(UINT32, UINT32, char*)> SendPacketFunc;
-
-
+	void ReceivePacketData(int clientIndex, uint32_t dataSize, const char* pData);
+	void PushSystemPacket(const PacketInfo& packet);
+	
 private:
-	void CreateCompent(const UINT32 maxClient_);
+	void Release();
+	void RegisterPacket();
 
-	void ClearConnectionInfo(INT32 clientIndex_);
+	void ClearConnectionInfo(int clientIndex);
+	void EnqueuePacketData(int clientIndex);
 
-	void EnqueuePacketData(const UINT32 clientIndex_);
 	PacketInfo DequePacketData();
-
 	PacketInfo DequeSystemPacketData();
-
 
 	void ProcessPacket();
 
-	void ProcessRecvPacket(const UINT32 clientIndex_, const UINT16 packetId_, const UINT16 packetSize_, char* pPacket_);
+	void ProcessRecvPacket(uint32_t clientIndex, uint16_t packetId, uint16_t packetSize, const char* pPacket);
 
-	void ProcessUserConnect(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_);
-	void ProcessUserDisConnect(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_);
+	void ProcessUserConnect(uint32_t clientIndex, uint16_t packetSize, const char* pPacket);
+	void ProcessUserDisconnect(uint32_t clientIndex, uint16_t packetSize, const char* pPacket);
 	
-	void ProcessLogin(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_);
-	void ProcessLoginDBResult(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_);
+	void ProcessLogin(uint32_t clientIndex, uint16_t packetSize, const char* pPacket);
+	void ProcessLoginDBResult(uint32_t clientIndex, uint16_t packetSize, const char* pPacket);
 	
-	void ProcessEnterRoom(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_);
-	void ProcessLeaveRoom(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_);
-	void ProcessRoomChatMessage(UINT32 clientIndex_, UINT16 packetSize_, char* pPacket_);
-
-	
+	void ProcessEnterRoom(uint32_t clientIndex, uint16_t packetSize, const char* pPacket);
+	void ProcessLeaveRoom(uint32_t clientIndex, uint16_t packetSize, const char* pPacket);
+	void ProcessRoomChatMessage(uint32_t clientIndex, uint16_t packetSize, const char* pPacket);
 
 
-	typedef void(PacketManager::* PROCESS_RECV_PACKET_FUNCTION)(UINT32, UINT16, char*);
+private:
+	typedef void(PacketManager::* PROCESS_RECV_PACKET_FUNCTION)(uint32_t, uint16_t, const char*);
 	std::unordered_map<int, PROCESS_RECV_PACKET_FUNCTION> mRecvFuntionDictionary;
 
 	UserManager* mUserManager;
 	RoomManager* mRoomManager;	
 	RedisManager* mRedisMgr;
 		
+	SendPacketFunc mSendPacketFunc; 
 	std::function<void(int, char*)> mSendMQDataFunc;
-
 
 	bool mIsRunProcessThread = false;
 	
@@ -75,8 +73,8 @@ private:
 	
 	std::mutex mLock;
 	
-	std::deque<UINT32> mInComingPacketUserIndex;
+	std::queue<uint32_t> mInComingPacketUserIndex;
 
-	std::deque<PacketInfo> mSystemPacketQueue;
+	std::queue<PacketInfo> mSystemPacketQueue;
 };
 
